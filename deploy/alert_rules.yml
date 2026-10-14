@@ -1,0 +1,80 @@
+# 律衡 LexScale Prometheus Alert Rules
+# 关键指标告警
+
+groups:
+  - name: lexscale_api
+    rules:
+      - alert: HighErrorRate
+        expr: rate(lexscale_http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LexScale API 高错误率"
+          description: "错误率超过 10% 持续 5 分钟"
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(lexscale_http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LexScale API 高延迟"
+          description: "P95 延迟超过 2 秒"
+
+      - alert: LLMProviderDown
+        expr: lexscale_llm_provider_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM Provider 不可用"
+          description: "{{ $labels.provider }} 已宕机 2 分钟"
+
+      - alert: HighRiskFindingRate
+        expr: rate(lexscale_findings_total{level="RED"}[10m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "高风险发现速率异常"
+          description: "RED 级风险发现速率超过阈值"
+
+  - name: lexscale_engine
+    rules:
+      - alert: EngineQueueBacklog
+        expr: lexscale_engine_queue_depth > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "引擎队列积压"
+          description: "意图队列深度超过 50"
+
+      - alert: WorkerFailureRate
+        expr: rate(lexscale_worker_executions_total{status="failed"}[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker 高失败率"
+          description: "{{ $labels.worker }} 失败率超过 20%"
+
+  - name: lexscale_guard
+    rules:
+      - alert: DenyRuleTriggered
+        expr: increase(lexscale_guard_denies_total[5m]) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "Guard deny 规则触发"
+          description: "规则 {{ $labels.rule_id }} 拦截了操作"
+
+      - alert: ApprovalBacklog
+        expr: lexscale_pending_approvals > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "审批积压"
+          description: "待审批项超过 20 个"

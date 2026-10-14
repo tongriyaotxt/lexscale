@@ -1,0 +1,398 @@
+openapi: 3.1.0
+
+info:
+  title: 律衡 LexScale API
+  description: |
+    开源法律 AI Agent 框架 REST API。
+    
+    核心能力：
+    - 双图模型（法律关系图 + 论证图）
+    - 三层证据（FACT / INFERENCE / UNKNOWN）
+    - 审批门（deny / ask / allow）
+    - 6 Agent 协作
+    - 审计链（哈希链防篡改）
+  version: 0.3.0
+  contact:
+    name: LexScale
+    url: https://github.com/tongriyaotxt/lexscale
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: 本地开发
+  - url: https://api.lexscale.dev/api/v1
+    description: 生产环境
+
+tags:
+  - name: Matters
+    description: 法律事务案件管理
+  - name: Analysis
+    description: 合同分析与风险发现
+  - name: Approvals
+    description: 审批门操作
+  - name: Graph
+    description: 双图模型查询
+  - name: Events
+    description: SSE 实时事件推送
+  - name: System
+    description: 健康检查与指标
+
+paths:
+  /healthz:
+    get:
+      tags: [System]
+      summary: 健康检查
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "ok" }
+
+  /metrics:
+    get:
+      tags: [System]
+      summary: Prometheus 指标
+      responses:
+        '200':
+          description: Prometheus 格式指标
+
+  /matters:
+    get:
+      tags: [Matters]
+      summary: 列出所有案件
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 案件列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Matter'
+    post:
+      tags: [Matters]
+      summary: 创建新案件
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "某某公司采购合同审查" }
+                description: { type: string }
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Matter'
+
+  /matters/{id}:
+    get:
+      tags: [Matters]
+      summary: 获取案件详情（含双图数据）
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 案件完整详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatterDetail'
+    delete:
+      tags: [Matters]
+      summary: 删除案件
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: 删除成功
+
+  /matters/{id}/input:
+    post:
+      tags: [Analysis]
+      summary: 注入合同文本进行分析
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, content]
+              properties:
+                type: { type: string, enum: [contract, evidence, statute] }
+                content: { type: string }
+      responses:
+        '202':
+          description: 分析任务已接受
+
+  /stats:
+    get:
+      tags: [System]
+      summary: 全局统计
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 统计数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+
+  /approvals:
+    get:
+      tags: [Approvals]
+      summary: 列出审批项
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, approved, rejected] }
+      responses:
+        '200':
+          description: 审批列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalItem'
+
+  /approvals/{id}/approve:
+    post:
+      tags: [Approvals]
+      summary: 批准审批项
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment: { type: string }
+      responses:
+        '200':
+          description: 已批准
+
+  /approvals/{id}/reject:
+    post:
+      tags: [Approvals]
+      summary: 拒绝审批项
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: 已拒绝
+
+  /audit:
+    get:
+      tags: [System]
+      summary: 审计日志（哈希链）
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: matter_id
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: 审计日志列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntry'
+
+  /events:
+    get:
+      tags: [Events]
+      summary: SSE 实时事件流
+      security:
+        - BearerAuth: []
+      description: |
+        Server-Sent Events 端点，推送实时更新。
+        
+        事件类型：
+        - `graph_updated` — 图数据更新
+        - `intent_completed` — Agent 意图执行完成
+        - `approval_requested` — 新的审批请求
+        - `finding_created` — 新风险发现
+      responses:
+        '200':
+          description: SSE 事件流
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Matter:
+      type: object
+      properties:
+        matter_id: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, enum: [active, archived] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    MatterDetail:
+      type: object
+      properties:
+        matter_id: { type: string }
+        stats:
+          type: object
+          properties:
+            entity_count: { type: integer }
+            claim_count: { type: integer }
+            finding_count: { type: integer }
+            red_count: { type: integer }
+            orange_count: { type: integer }
+        entities:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/EntityNode'
+        claims:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ClaimNode'
+        findings:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/RiskFinding'
+
+    EntityNode:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string }
+        name: { type: string }
+        attributes: { type: object, additionalProperties: { type: string } }
+
+    ClaimNode:
+      type: object
+      properties:
+        id: { type: string }
+        statement: { type: string }
+        status: { type: string }
+        evidence_tier: { type: string, enum: [FACT, INFERENCE, UNKNOWN] }
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Citation'
+
+    Citation:
+      type: object
+      properties:
+        source: { type: string }
+        reference: { type: string }
+        quote: { type: string }
+
+    RiskFinding:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        severity: { type: integer, minimum: 1, maximum: 5 }
+        likelihood: { type: integer, minimum: 1, maximum: 5 }
+        score: { type: integer }
+        level: { type: string, enum: [RED, ORANGE, YELLOW, GREEN] }
+        entity_refs: { type: array, items: { type: string } }
+        clause_refs: { type: array, items: { type: string } }
+        recommendation: { type: string }
+
+    DashboardStats:
+      type: object
+      properties:
+        total_matters: { type: integer }
+        active_matters: { type: integer }
+        total_findings: { type: integer }
+        red_findings: { type: integer }
+        orange_findings: { type: integer }
+        yellow_findings: { type: integer }
+        green_findings: { type: integer }
+        pending_approvals: { type: integer }
+
+    ApprovalItem:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [intent, finding, artifact] }
+        title: { type: string }
+        description: { type: string }
+        requester: { type: string }
+        requested_at: { type: string, format: date-time }
+        status: { type: string, enum: [pending, approved, rejected] }
+        risk_level: { type: string }
+
+    AuditEntry:
+      type: object
+      properties:
+        id: { type: string }
+        action: { type: string }
+        actor: { type: string }
+        timestamp: { type: string, format: date-time }
+        hash: { type: string }
+        prev_hash: { type: string }
+        detail: { type: string }

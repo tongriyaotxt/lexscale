@@ -1,0 +1,153 @@
+# 律衡 LexScale Docker Compose
+# 生产级编排：API + PostgreSQL + 前端（Phase 4 预留）
+
+version: "3.8"
+
+services:
+  # ─── API 服务 ──────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lexscale-api
+    ports:
+      - "8080:8080"
+    environment:
+      - LEXSCALE_DB_HOST=postgres
+      - LEXSCALE_DB_PORT=5432
+      - LEXSCALE_DB_USER=lexscale
+      - LEXSCALE_DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - LEXSCALE_DB_NAME=lexscale
+      - LEXSCALE_LLM_API_KEY=${LLM_API_KEY}
+      - LEXSCALE_LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}
+      - LEXSCALE_COUNSEL_MODEL=${COUNSEL_MODEL:-gpt-4}
+      - LEXSCALE_SMALL_MODEL=${SMALL_MODEL:-gpt-3.5-turbo}
+      - LEXSCALE_AUTH_TOKEN=${AUTH_TOKEN}
+      - LEXSCALE_LOG_LEVEL=${LOG_LEVEL:-info}
+      - LEXSCALE_ENV=${ENV:-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - lexscale-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+  # ─── PostgreSQL ────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: lexscale-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=lexscale
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+      - POSTGRES_DB=lexscale
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - lexscale-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lexscale -d lexscale"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ─── Redis（缓存 + 会话）───────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: lexscale-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - lexscale-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ─── 前端 ────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: lexscale-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8080
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - lexscale-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  # ─── Nginx 反向代理（生产）─────────────────────────────
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: lexscale-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./deploy/ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - api
+  #     - frontend
+  #   networks:
+  #     - lexscale-network
+  #   restart: unless-stopped
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  lexscale-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

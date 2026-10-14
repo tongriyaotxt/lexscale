@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased;
+  }
+}
+
+@layer components {
+  /* React Flow custom node styles */
+  .react-flow__node-entity {
+    @apply bg-legal-100 dark:bg-legal-900/30 border-2 border-legal-500 rounded-lg px-3 py-2 shadow-md min-w-[120px];
+  }
+
+  .react-flow__node-claim {
+    @apply bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-400 rounded-lg px-3 py-2 shadow-md min-w-[120px];
+  }
+
+  .react-flow__node-finding {
+    @apply rounded-lg px-3 py-2 shadow-lg border-2 min-w-[120px];
+  }
+
+  .react-flow__node-finding[data-level="RED"] {
+    @apply bg-red-50 dark:bg-red-900/20 border-red-500;
+  }
+
+  .react-flow__node-finding[data-level="ORANGE"] {
+    @apply bg-orange-50 dark:bg-orange-900/20 border-orange-400;
+  }
+
+  .react-flow__node-finding[data-level="YELLOW"] {
+    @apply bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400;
+  }
+
+  .react-flow__node-finding[data-level="GREEN"] {
+    @apply bg-green-50 dark:bg-green-900/20 border-green-400;
+  }
+
+  /* Risk badges */
+  .risk-badge {
+    @apply inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full;
+  }
+}

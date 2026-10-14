@@ -1,0 +1,52 @@
+# Binaries
+lexscale
+lexagi
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+
+# Go workspace file
+go.work
+
+# Environment
+.env
+.env.local
+
+# Node.js / Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/build/
+web/.env*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# Build artifacts
+dist/
+tmp/
