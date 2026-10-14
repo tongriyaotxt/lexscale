@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { connectSSE, SSEEvent } from './api';
+import { connectSSE, SSEEvent } from '../lib/api';
 
 /**
  * SSE Hook — 订阅后端实时事件
