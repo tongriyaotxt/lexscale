@@ -18,6 +18,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"strings"
@@ -96,7 +97,7 @@ func (s *Server) loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next(w, r)
-		log.Printf("[%s] %s %s (%v)", r.Method, r.URL.Path, r.RemoteAddr, time.Since(start))
+		log.Printf("[%s] %s %s (%v)", r.Method, html.EscapeString(r.URL.Path), html.EscapeString(r.RemoteAddr), time.Since(start))
 	}
 }
 
@@ -381,7 +382,9 @@ func (s *Server) RegisterEngine(matterID string, eng *engine.Engine, gt *guard.G
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("[error] failed to encode JSON response: %v", err)
+	}
 }
 
 // respondError 错误响应
